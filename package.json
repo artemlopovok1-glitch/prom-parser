@@ -1,6 +1,7 @@
 {
   "name": "prom-parser",
   "version": "1.0.0",
+  "type": "module",
   "description": "Prom.ua opinions parser",
   "main": "server.js",
   "scripts": {

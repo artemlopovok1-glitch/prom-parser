@@ -1,26 +1,8 @@
 import express from 'express';
-import puppeteer from 'puppeteer-core';
-import { execSync } from 'child_process';
+import puppeteer from 'puppeteer';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Find Chromium path on Render
-function getChromiumPath() {
-  const paths = [
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable'
-  ];
-  for (const p of paths) {
-    try {
-      execSync(`test -f ${p}`);
-      return p;
-    } catch {}
-  }
-  return '/usr/bin/chromium-browser';
-}
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Prom.ua parser is running 🚀' });
@@ -38,7 +20,6 @@ app.get('/parse', async (req, res) => {
   let browser;
   try {
     browser = await puppeteer.launch({
-      executablePath: getChromiumPath(),
       headless: true,
       args: [
         '--no-sandbox',
@@ -53,9 +34,7 @@ app.get('/parse', async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-    );
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'uk-UA,uk;q=0.9,ru;q=0.8' });
 
     const allReviews = [];
@@ -78,9 +57,7 @@ app.get('/parse', async (req, res) => {
           const productLinkEl = item.querySelector('a[href*="/p"]');
           const productName = productLinkEl ? productLinkEl.textContent.trim() : null;
           const productUrl = productLinkEl ? productLinkEl.href : null;
-          if (dateText && productName) {
-            results.push({ dateText, productName, productUrl });
-          }
+          if (dateText && productName) results.push({ dateText, productName, productUrl });
         });
         return results;
       });

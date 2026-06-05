@@ -1,4 +1,6 @@
-const express = require('express');
+import express from 'express';
+import puppeteer from 'puppeteer';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -17,7 +19,6 @@ app.get('/parse', async (req, res) => {
 
   let browser;
   try {
-    const puppeteer = require('puppeteer');
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -47,7 +48,6 @@ app.get('/parse', async (req, res) => {
     while (keepGoing) {
       const pageUrl = pageNum === 1 ? url : `${url}?page=${pageNum}`;
       await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
       await new Promise(r => setTimeout(r, 2000));
 
       const reviews = await page.evaluate(() => {

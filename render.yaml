@@ -2,7 +2,7 @@ services:
   - type: web
     name: prom-parser
     env: node
-    buildCommand: npm install
+    buildCommand: apt-get install -y chromium-browser && npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV

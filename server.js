@@ -1,8 +1,26 @@
 import express from 'express';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import { execSync } from 'child_process';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Find Chromium path on Render
+function getChromiumPath() {
+  const paths = [
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable'
+  ];
+  for (const p of paths) {
+    try {
+      execSync(`test -f ${p}`);
+      return p;
+    } catch {}
+  }
+  return '/usr/bin/chromium-browser';
+}
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Prom.ua parser is running 🚀' });
@@ -20,6 +38,7 @@ app.get('/parse', async (req, res) => {
   let browser;
   try {
     browser = await puppeteer.launch({
+      executablePath: getChromiumPath(),
       headless: true,
       args: [
         '--no-sandbox',
@@ -71,10 +90,7 @@ app.get('/parse', async (req, res) => {
       for (const r of reviews) {
         const parsedDate = parseDate(r.dateText);
         if (!parsedDate) continue;
-        if (parsedDate < thirtyDaysAgo) {
-          keepGoing = false;
-          break;
-        }
+        if (parsedDate < thirtyDaysAgo) { keepGoing = false; break; }
         allReviews.push({ ...r, date: parsedDate.toISOString().split('T')[0] });
       }
 

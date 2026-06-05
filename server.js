@@ -1,16 +1,11 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Health check ────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Prom.ua parser is running 🚀' });
 });
 
-// ─── Main endpoint ────────────────────────────────────────────────────────────
-// GET /parse?url=https://prom.ua/opinions/list/XXXXXXX
 app.get('/parse', async (req, res) => {
   const { url } = req.query;
 
@@ -22,8 +17,9 @@ app.get('/parse', async (req, res) => {
 
   let browser;
   try {
+    const puppeteer = require('puppeteer');
     browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -52,40 +48,29 @@ app.get('/parse', async (req, res) => {
       const pageUrl = pageNum === 1 ? url : `${url}?page=${pageNum}`;
       await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-      // Wait for reviews to load
-      await page.waitForSelector('[data-qaid="opinion_item"], .b-opinions-list__item', {
-        timeout: 10000
-      }).catch(() => null);
+      await new Promise(r => setTimeout(r, 2000));
 
       const reviews = await page.evaluate(() => {
         const items = document.querySelectorAll('[data-qaid="opinion_item"]');
         const results = [];
-
         items.forEach(item => {
-          // Date
-          const dateEl = item.querySelector('time, [data-qaid="date"], .b-opinion__date');
+          const dateEl = item.querySelector('time, [data-qaid="date"]');
           const dateText = dateEl ? (dateEl.getAttribute('datetime') || dateEl.textContent.trim()) : null;
-
-          // Product link + name
           const productLinkEl = item.querySelector('a[href*="/p"]');
           const productName = productLinkEl ? productLinkEl.textContent.trim() : null;
           const productUrl = productLinkEl ? productLinkEl.href : null;
-
           if (dateText && productName) {
             results.push({ dateText, productName, productUrl });
           }
         });
-
         return results;
       });
 
       if (reviews.length === 0) break;
 
-      // Parse dates and filter
       for (const r of reviews) {
         const parsedDate = parseDate(r.dateText);
         if (!parsedDate) continue;
-
         if (parsedDate < thirtyDaysAgo) {
           keepGoing = false;
           break;
@@ -94,12 +79,11 @@ app.get('/parse', async (req, res) => {
       }
 
       pageNum++;
-      if (pageNum > 20) break; // Safety limit
+      if (pageNum > 20) break;
     }
 
     await browser.close();
 
-    // ─── Count reviews per product ──────────────────────────────────────────
     const productMap = {};
     for (const r of allReviews) {
       const key = r.productUrl || r.productName;
@@ -110,22 +94,14 @@ app.get('/parse', async (req, res) => {
       if (r.date > productMap[key].lastDate) productMap[key].lastDate = r.date;
     }
 
-    // ─── Sort by count desc ─────────────────────────────────────────────────
     const products = Object.values(productMap).sort((a, b) => b.count - a.count);
-
-    // ─── Add color label ────────────────────────────────────────────────────
     const labeled = products.map(p => ({
       ...p,
       color: p.count >= 3 ? 'green' : p.count >= 1 ? 'yellow' : 'red',
-      label: p.count >= 3 ? '🟢 Хит' : p.count >= 1 ? '🟡 Середній' : '🔴 Слабий'
+      label: p.count >= 3 ? '🟢 Хіт' : p.count >= 1 ? '🟡 Середній' : '🔴 Слабий'
     }));
 
-    res.json({
-      success: true,
-      totalReviews: allReviews.length,
-      period: '30 днів',
-      products: labeled
-    });
+    res.json({ success: true, totalReviews: allReviews.length, period: '30 днів', products: labeled });
 
   } catch (err) {
     if (browser) await browser.close().catch(() => {});
@@ -134,20 +110,12 @@ app.get('/parse', async (req, res) => {
   }
 });
 
-// ─── Date parser (Ukrainian/Russian formats) ──────────────────────────────────
 function parseDate(str) {
   if (!str) return null;
   str = str.trim();
-
-  // ISO format: 2024-06-04
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) return new Date(str);
-
-  // DD.MM.YYYY
   const dmy = str.match(/(\d{2})\.(\d{2})\.(\d{4})/);
   if (dmy) return new Date(`${dmy[3]}-${dmy[2]}-${dmy[1]}`);
-
-  // "04.06.2026" -> already covered above
-  // "4 червня 2026" / "4 июня 2026"
   const months = {
     'січня':1,'лютого':2,'березня':3,'квітня':4,'травня':5,'червня':6,
     'липня':7,'серпня':8,'вересня':9,'жовтня':10,'листопада':11,'грудня':12,
@@ -159,7 +127,6 @@ function parseDate(str) {
     const m = months[wordy[2].toLowerCase()];
     if (m) return new Date(`${wordy[3]}-${String(m).padStart(2,'0')}-${wordy[1].padStart(2,'0')}`);
   }
-
   return null;
 }
 
